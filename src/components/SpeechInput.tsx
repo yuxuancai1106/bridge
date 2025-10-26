@@ -40,6 +40,9 @@ export default function SpeechInput({
   } | null>(null)
   const recognitionRef = useRef<any>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const sessionStartValueRef = useRef<string>('')
+  const accumulatedTranscriptRef = useRef<string>('')
+  const isStoppingRef = useRef<boolean>(false)
 
   // Check if speech recognition is supported
   useEffect(() => {
@@ -49,50 +52,59 @@ export default function SpeechInput({
       
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition()
-        recognition.continuous = false
-        recognition.interimResults = false
+        recognition.continuous = true  // Keep listening continuously
+        recognition.interimResults = true  // Get interim results for real-time feedback
         recognition.lang = 'en-US'
         
         recognition.onstart = () => {
+          if (isStoppingRef.current) {
+            // Don't start if we're stopping
+            return
+          }
           setIsListening(true)
           setError(null)
+          // Clear stopping flag
+          isStoppingRef.current = false
+          // Store the current value when listening starts for continuous appending
+          sessionStartValueRef.current = value
+          // Reset accumulated transcript
+          accumulatedTranscriptRef.current = ''
         }
         
         recognition.onresult = async (event: any) => {
-          const transcript = event.results[0][0].transcript
-          setIsListening(false)
+          // Ignore results if we're stopping
+          if (isStoppingRef.current) {
+            return
+          }
           
-          if (enableLLMCorrection && transcript.trim()) {
-            setIsCorrecting(true)
-            try {
-              const correctionOptions: LLMCorrectionOptions = {
-                fieldType,
-                originalText: transcript
-              }
-              const result = await llmService.correctText(correctionOptions)
-              
-              setCorrectionResult({
-                original: transcript,
-                corrected: result.correctedText,
-                confidence: result.confidence,
-                agentUsed: result.agentUsed,
-                processingTime: result.processingTime
-              })
-              
-              // Auto-apply correction if confidence is high
-              if (result.confidence > 0.7) {
-                onChange(result.correctedText)
-              } else {
-                onChange(transcript) // Use original if confidence is low
-              }
-            } catch (error) {
-              console.error('LLM correction failed:', error)
-              onChange(transcript) // Fallback to original
-            } finally {
-              setIsCorrecting(false)
+          let interimTranscript = ''
+          let newFinalTranscript = ''
+          
+          // Get both interim and final results
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript
+            if (event.results[i].isFinal) {
+              // Accumulate final results
+              newFinalTranscript += transcript + ' '
+            } else {
+              interimTranscript += transcript
             }
-          } else {
-            onChange(transcript)
+          }
+          
+          // Accumulate final transcripts (handles pauses properly)
+          if (newFinalTranscript) {
+            accumulatedTranscriptRef.current += newFinalTranscript
+          }
+          
+          // For continuous mode, show all accumulated speech + current interim
+          const sessionStartValue = sessionStartValueRef.current
+          const accumulatedFinal = accumulatedTranscriptRef.current.trim()
+          const currentTotal = accumulatedFinal + (interimTranscript ? ' ' + interimTranscript : '')
+          const displayValue = sessionStartValue + (sessionStartValue ? ' ' : '') + currentTotal
+          
+          // Show real-time updates (all final + interim)
+          if (currentTotal) {
+            onChange(displayValue)
           }
         }
         
@@ -120,6 +132,35 @@ export default function SpeechInput({
         
         recognition.onend = () => {
           setIsListening(false)
+          
+          // Only process if we're not explicitly stopping (to avoid double processing)
+          if (!isStoppingRef.current) {
+            const accumulatedFinal = accumulatedTranscriptRef.current.trim()
+            if (accumulatedFinal && enableLLMCorrection) {
+              const sessionStartValue = sessionStartValueRef.current
+              const fullText = sessionStartValue + (sessionStartValue ? ' ' : '') + accumulatedFinal
+              
+              setIsCorrecting(true)
+              llmService.correctText({
+                fieldType,
+                originalText: fullText
+              }).then(result => {
+                setCorrectionResult({
+                  original: fullText,
+                  corrected: result.correctedText,
+                  confidence: result.confidence,
+                  agentUsed: result.agentUsed,
+                  processingTime: result.processingTime
+                })
+                onChange(result.correctedText)
+              }).catch(error => {
+                console.error('LLM correction failed:', error)
+                onChange(fullText)
+              }).finally(() => {
+                setIsCorrecting(false)
+              })
+            }
+          }
         }
         
         recognitionRef.current = recognition
@@ -131,16 +172,68 @@ export default function SpeechInput({
     if (!isSupported || !recognitionRef.current || disabled) return
     
     try {
+      // In continuous mode, check if already listening to avoid restarts
+      if (isListening) {
+        console.log('Already listening')
+        return
+      }
       recognitionRef.current.start()
     } catch (error) {
-      console.log('Speech recognition already started or not available')
-      setError('Speech recognition not available. Please try again.')
+      // This is expected if already listening
+      if (error instanceof DOMException && error.name === 'InvalidStateError') {
+        console.log('Speech recognition already running')
+      } else {
+        console.log('Speech recognition error:', error)
+        setError('Speech recognition not available. Please try again.')
+      }
     }
   }
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
+    if (recognitionRef.current && isListening) {
+      // Set flag to ignore any pending results
+      isStoppingRef.current = true
+      
+      try {
+        // Stop recognition
+        recognitionRef.current.stop()
+      } catch (error) {
+        console.log('Error stopping recognition:', error)
+      }
+      
+      setIsListening(false)
+      
+      // Process accumulated speech with Groq when stopping
+      const accumulatedFinal = accumulatedTranscriptRef.current.trim()
+      if (accumulatedFinal && enableLLMCorrection) {
+        const sessionStartValue = sessionStartValueRef.current
+        const fullText = sessionStartValue + (sessionStartValue ? ' ' : '') + accumulatedFinal
+        
+        setIsCorrecting(true)
+        llmService.correctText({
+          fieldType,
+          originalText: fullText
+        }).then(result => {
+          setCorrectionResult({
+            original: fullText,
+            corrected: result.correctedText,
+            confidence: result.confidence,
+            agentUsed: result.agentUsed,
+            processingTime: result.processingTime
+          })
+          onChange(result.correctedText)
+        }).catch(error => {
+          console.error('LLM correction failed:', error)
+          onChange(fullText)
+        }).finally(() => {
+          setIsCorrecting(false)
+        })
+      }
+      
+      // Reset flag after a short delay
+      setTimeout(() => {
+        isStoppingRef.current = false
+      }, 500)
     }
   }
 
@@ -211,7 +304,13 @@ export default function SpeechInput({
       {/* Help text */}
       {isSupported && !isListening && !error && !isCorrecting && (
         <div className="speech-help">
-          💡 Click the microphone to speak your answer
+          💡 Click microphone to speak (keeps listening until you click again)
+        </div>
+      )}
+      
+      {isListening && (
+        <div className="speech-help bg-blue-50 text-blue-700 border border-blue-200">
+          🎤 Listening... Speak freely, pauses are OK. Click microphone again to stop.
         </div>
       )}
 

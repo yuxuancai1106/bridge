@@ -7,6 +7,7 @@ import { ArrowLeft, Send, Shield, Heart, MessageCircle } from 'lucide-react'
 import { CONVERSATION_STARTERS, SAFETY_TIPS } from '@/lib/utils'
 import TTSControls from '@/components/TTSControls'
 import TTSButton from '@/components/TTSButton'
+import SpeechInput from '@/components/SpeechInput'
 import { useTTS } from '@/hooks/useTTS'
 
 interface Message {
@@ -277,17 +278,19 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Message Input */}
+          {/* Message Input with Speech-to-Text */}
           <div className="border-t bg-white p-4">
             <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+              <div className="flex-1">
+                <SpeechInput
+                  value={newMessage}
+                  onChange={(value) => setNewMessage(value)}
+                  placeholder="Type or speak your message..."
+                  className="w-full"
+                  fieldType="general"
+                  enableLLMCorrection={true}
+                />
+              </div>
               <button
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim()}
@@ -296,6 +299,9 @@ export default function ChatPage() {
                 <Send className="w-4 h-4" />
               </button>
             </div>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              💡 Click the microphone to use speech input with Groq AI
+            </p>
           </div>
         </div>
 

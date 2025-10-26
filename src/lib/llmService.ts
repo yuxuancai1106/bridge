@@ -1,5 +1,5 @@
 // LLM service for correcting speech-to-text output
-import { fetchAiService, FetchAiOptions, FetchAiResult } from './fetchAiService'
+// Uses API route to securely call Groq from client-side
 
 export interface LLMCorrectionOptions {
   fieldType: 'name' | 'email' | 'location' | 'phone' | 'address' | 'general'
@@ -18,25 +18,35 @@ export interface LLMCorrectionResult {
 class LLMService {
   async correctText(options: LLMCorrectionOptions): Promise<LLMCorrectionResult> {
     try {
-      // Use Fetch.ai as the primary service
-      const fetchAiOptions: FetchAiOptions = {
-        fieldType: options.fieldType,
-        originalText: options.originalText,
-        context: options.context
-      }
-      
-      const result = await fetchAiService.correctText(fetchAiOptions)
-      
-      return {
-        correctedText: result.correctedText,
-        confidence: result.confidence,
-        suggestions: result.suggestions,
-        agentUsed: result.agentUsed,
-        processingTime: result.processingTime
+      // Call our API route which runs server-side
+      const response = await fetch('/api/groq', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fieldType: options.fieldType,
+          originalText: options.originalText,
+          context: options.context
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        return {
+          correctedText: data.data.correctedText,
+          confidence: data.data.confidence,
+          suggestions: data.data.suggestions,
+          agentUsed: `Groq ${data.data.model}`,
+          processingTime: data.data.processingTime
+        }
+      } else {
+        throw new Error(data.error || 'LLM correction failed')
       }
     } catch (error) {
       console.error('LLM correction error:', error)
-      // Fallback to original text if all services fail
+      // Fallback to original text if Groq fails
       return {
         correctedText: options.originalText,
         confidence: 0,
