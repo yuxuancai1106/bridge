@@ -1,144 +1,176 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Send, Shield, Heart, MessageCircle } from 'lucide-react'
-import { CONVERSATION_STARTERS, SAFETY_TIPS } from '@/lib/utils'
-import TTSControls from '@/components/TTSControls'
-import TTSButton from '@/components/TTSButton'
-import { useTTS } from '@/hooks/useTTS'
-
-interface Message {
-  id: string
-  sender_id: string
-  receiver_id: string
-  content: string
-  message_type: 'text' | 'image' | 'system'
-  created_at: string
-  read_at?: string
-}
-
-interface ChatUser {
-  id: string
-  name: string
-  age: number
-  role: 'mentor' | 'seeker'
-  verified: boolean
-  community_score: number
-}
+import { ArrowLeft, Send, Mic, MicOff, Loader2 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { getUserProfile } from '@/lib/authService'
+import { UserProfile } from '@/lib/authService'
+import {
+  getConversation,
+  getMessages,
+  createMessage,
+  createConversation,
+  Message,
+} from '@/lib/dbService'
 
 export default function ChatPage() {
+  const router = useRouter()
   const params = useParams()
-  const chatId = params.id as string
+  const { user, loading: authLoading } = useAuth()
+  const [otherUser, setOtherUser] = useState<UserProfile | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
-  const [chatUser, setChatUser] = useState<ChatUser | null>(null)
-  const [currentUser, setCurrentUser] = useState<ChatUser | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [loading, setLoading] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [showSafetyTips, setShowSafetyTips] = useState(true)
-  const { speak, isEnabled } = useTTS()
+  const recognitionRef = useRef<any>(null)
+  const recordedTextRef = useRef<string>('')
 
-  const speakMessage = (message: Message, senderName: string) => {
-    if (isEnabled) {
-      speak(`${senderName} says: ${message.content}`)
-    }
-  }
-
-  const speakConversationStarter = (starter: string) => {
-    if (isEnabled) {
-      speak(`Conversation starter: ${starter}`)
-    }
-  }
-
-  const speakSafetyTip = (tip: string) => {
-    if (isEnabled) {
-      speak(`Safety tip: ${tip}`)
-    }
-  }
+  const otherUserId = params.id as string
 
   useEffect(() => {
-    // Mock data for demo
-    const mockChatUser: ChatUser = {
-      id: chatId,
-      name: chatId === '22222222-2222-2222-2222-222222222222' ? 'Alex Chen' : 'Sarah Williams',
-      age: chatId === '22222222-2222-2222-2222-222222222222' ? 22 : 21,
-      role: 'seeker',
-      verified: true,
-      community_score: 4.5
+    if (!authLoading && !user) {
+      router.push('/login')
+    } else if (user) {
+      initializeChat()
     }
+  }, [user, authLoading])
 
-    const mockCurrentUser: ChatUser = {
-      id: '11111111-1111-1111-1111-111111111111',
-      name: 'Mary Johnson',
-      age: 67,
-      role: 'mentor',
-      verified: true,
-      community_score: 4.8
-    }
+  useEffect(() => {
+    // Initialize Web Speech API
+    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = true
+      recognitionRef.current.interimResults = true
+      recognitionRef.current.lang = 'en-US'
 
-    const mockMessages: Message[] = [
-      {
-        id: '1',
-        sender_id: 'system',
-        receiver_id: 'both',
-        content: 'You two have been matched! You share interests in cooking and volunteering.',
-        message_type: 'system',
-        created_at: new Date(Date.now() - 3600000).toISOString()
-      },
-      {
-        id: '2',
-        sender_id: mockCurrentUser.id,
-        receiver_id: mockChatUser.id,
-        content: 'Hello! I\'m excited to connect with you. I saw we both enjoy cooking - what\'s your favorite dish to make?',
-        message_type: 'text',
-        created_at: new Date(Date.now() - 3000000).toISOString()
-      },
-      {
-        id: '3',
-        sender_id: mockChatUser.id,
-        receiver_id: mockCurrentUser.id,
-        content: 'Hi Mary! Nice to meet you! I love making homemade pasta and experimenting with different sauces. What about you?',
-        message_type: 'text',
-        created_at: new Date(Date.now() - 2400000).toISOString()
-      },
-      {
-        id: '4',
-        sender_id: mockCurrentUser.id,
-        receiver_id: mockChatUser.id,
-        content: 'That sounds wonderful! I\'ve been cooking for over 40 years and I love sharing family recipes. Would you be interested in learning some traditional techniques?',
-        message_type: 'text',
-        created_at: new Date(Date.now() - 1800000).toISOString()
+      recognitionRef.current.onresult = (event: any) => {
+        let interimTranscript = ''
+        let finalTranscript = ''
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' '
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        if (finalTranscript) {
+          recordedTextRef.current += finalTranscript
+        }
+
+        // Update the message input with current transcript
+        setNewMessage(recordedTextRef.current + interimTranscript)
       }
-    ]
 
-    setChatUser(mockChatUser)
-    setCurrentUser(mockCurrentUser)
-    setMessages(mockMessages)
-  }, [chatId])
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+      }
+
+      recognitionRef.current.onend = () => {
+        if (isRecording) {
+          // Restart if still recording
+          recognitionRef.current.start()
+        }
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+    }
+  }, [])
 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
 
+  const initializeChat = async () => {
+    if (!user) return
+
+    try {
+      // Get other user's profile
+      const profile = await getUserProfile(otherUserId)
+      if (profile) {
+        setOtherUser(profile)
+      }
+
+      // Check if conversation exists or create new one
+      const participants = [user.uid, otherUserId].sort()
+      let convId = await createConversation(participants)
+      setConversationId(convId)
+
+      // Load messages
+      const msgs = await getMessages(convId)
+      setMessages(msgs.reverse())
+
+      setLoading(false)
+    } catch (error) {
+      console.error('Error initializing chat:', error)
+      setLoading(false)
+    }
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !currentUser || !chatUser) return
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !conversationId || !user) return
 
-    const message: Message = {
-      id: Date.now().toString(),
-      sender_id: currentUser.id,
-      receiver_id: chatUser.id,
-      content: newMessage.trim(),
-      message_type: 'text',
-      created_at: new Date().toISOString()
+    const messageContent = newMessage.trim()
+    setNewMessage('')
+    recordedTextRef.current = ''
+
+    try {
+      const currentUserProfile = await getUserProfile(user.uid)
+
+      const messageData: Message = {
+        conversationId,
+        senderId: user.uid,
+        senderName: currentUserProfile?.name || 'Unknown',
+        content: messageContent,
+        safetyChecked: false,
+      }
+
+      await createMessage(messageData)
+
+      // Add message to local state
+      setMessages(prev => [
+        ...prev,
+        { ...messageData, timestamp: new Date() },
+      ])
+    } catch (error) {
+      console.error('Error sending message:', error)
+    }
+  }
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.')
+      return
     }
 
-    setMessages(prev => [...prev, message])
-    setNewMessage('')
+    if (isRecording) {
+      // Stop recording
+      recognitionRef.current.stop()
+      setIsRecording(false)
+      // The recorded text is already in newMessage, ready to send
+    } else {
+      // Start recording
+      recordedTextRef.current = newMessage // Keep existing text
+      recognitionRef.current.start()
+      setIsRecording(true)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -148,238 +180,136 @@ export default function ChatPage() {
     }
   }
 
-  const sendConversationStarter = (starter: string) => {
-    if (!currentUser || !chatUser) return
-
-    const message: Message = {
-      id: Date.now().toString(),
-      sender_id: currentUser.id,
-      receiver_id: chatUser.id,
-      content: starter,
-      message_type: 'text',
-      created_at: new Date().toISOString()
-    }
-
-    setMessages(prev => [...prev, message])
-  }
-
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })
+  if (loading || authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading conversation...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Link href="/matches" className="mr-4 text-gray-600 hover:text-gray-800">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
-                  <span className="text-lg">
-                    {chatUser?.role === 'mentor' ? '👵' : '👩‍🎓'}
-                  </span>
+      <header className="bg-white shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="text-gray-600 hover:text-indigo-600 transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white text-lg font-bold">
+                  {otherUser?.name?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <h1 className="font-semibold text-lg">{chatUser?.name}</h1>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span>{chatUser?.age} years old</span>
-                    {chatUser?.verified && (
-                      <>
-                        <span className="mx-2">•</span>
-                        <Shield className="w-4 h-4 text-green-600 mr-1" />
-                        <span>Verified</span>
-                      </>
-                    )}
-                  </div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {otherUser?.name || 'User'}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {otherUser?.role === 'mentor' ? '👵 Mentor' : '👩‍🎓 Seeker'}
+                  </p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <TTSControls compact={true} showSettings={false} />
-              <Heart className="w-4 h-4 text-yellow-500 mr-1" />
-              <span>{chatUser?.community_score}</span>
-            </div>
+            <Link href="/" className="text-xl font-bold text-indigo-600">
+              🌉 Bridge
+            </Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto flex h-[calc(100vh-80px)]">
-        {/* Chat Messages */}
-        <div className="flex-1 flex flex-col">
-          {/* Safety Banner */}
-          {showSafetyTips && (
-            <div className="bg-yellow-50 border-b border-yellow-200 p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start">
-                  <Shield className="w-5 h-5 text-yellow-600 mr-3 mt-0.5" />
-                  <div>
-                    <h3 className="font-medium text-yellow-800 mb-1">Safety First</h3>
-                    <p className="text-sm text-yellow-700">
-                      Always meet in public for your first meeting. Never share financial information.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowSafetyTips(false)}
-                  className="text-yellow-600 hover:text-yellow-800"
-                >
-                  ×
-                </button>
-              </div>
+      {/* Messages Area */}
+      <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-6 overflow-y-auto">
+        <div className="space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 mb-4">No messages yet. Start the conversation!</p>
             </div>
-          )}
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.sender_id === currentUser?.id ? 'justify-end' : 'justify-start'
-                }`}
-              >
+          ) : (
+            messages.map((message, index) => {
+              const isOwnMessage = message.senderId === user?.uid
+              return (
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    message.message_type === 'system'
-                      ? 'bg-blue-50 text-blue-800 text-center mx-auto'
-                      : message.sender_id === currentUser?.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
-                  }`}
+                  key={index}
+                  className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm flex-1">{message.content}</p>
-                    {message.message_type !== 'system' && isEnabled && (
-                      <TTSButton 
-                        text={`${message.sender_id === currentUser?.id ? 'You' : chatUser?.name} says: ${message.content}`}
-                        className="ml-2 text-xs"
-                        onClick={() => speakMessage(message, message.sender_id === currentUser?.id ? 'You' : chatUser?.name || 'Unknown')}
-                      >
-                        🔊
-                      </TTSButton>
-                    )}
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
+                      isOwnMessage
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-900 shadow-md'
+                    }`}
+                  >
+                    <p className="text-sm font-medium mb-1">{message.senderName}</p>
+                    <p className="whitespace-pre-wrap break-words">{message.content}</p>
                   </div>
-                  {message.message_type !== 'system' && (
-                    <p className="text-xs opacity-70 mt-1">
-                      {formatTime(message.created_at)}
-                    </p>
-                  )}
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Message Input */}
-          <div className="border-t bg-white p-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your message..."
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                className="bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+              )
+            })
+          )}
+          <div ref={messagesEndRef} />
         </div>
+      </div>
 
-        {/* Sidebar */}
-        <div className="w-80 bg-white border-l p-4 overflow-y-auto">
-          {/* Conversation Starters */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Conversation Starters
-            </h3>
-            <div className="space-y-2">
-              {CONVERSATION_STARTERS.slice(0, 4).map((starter, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <button
-                    onClick={() => sendConversationStarter(starter)}
-                    className="flex-1 text-left p-3 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    {starter}
-                  </button>
-                  <TTSButton 
-                    text={`Conversation starter: ${starter}`}
-                    className="text-xs"
-                    onClick={() => speakConversationStarter(starter)}
-                  >
-                    🔊
-                  </TTSButton>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Safety Tips */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <Shield className="w-4 h-4 mr-2" />
-              Safety Tips
-            </h3>
-            <div className="space-y-2">
-              {SAFETY_TIPS.map((tip, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <div className="text-sm text-gray-600 p-2 bg-yellow-50 rounded flex-1">
-                    {tip}
-                  </div>
-                  <TTSButton 
-                    text={`Safety tip: ${tip}`}
-                    className="text-xs"
-                    onClick={() => speakSafetyTip(tip)}
-                  >
-                    🔊
-                  </TTSButton>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Match Info */}
-          <div className="mb-6">
-            <h3 className="font-semibold text-gray-900 mb-3">Match Details</h3>
-            <div className="text-sm text-gray-600 space-y-2">
-              <div className="flex justify-between">
-                <span>Compatibility:</span>
-                <span className="font-medium text-indigo-600">87%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Shared Interests:</span>
-                <span className="font-medium">3</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Communication:</span>
-                <span className="font-medium">Both</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="space-y-2">
-            <button className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors">
-              Schedule Meeting
+      {/* Input Area */}
+      <div className="bg-white border-t border-gray-200 sticky bottom-0">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-end gap-2">
+            <button
+              onClick={toggleRecording}
+              className={`p-3 rounded-full transition-colors ${
+                isRecording
+                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              }`}
+              title={isRecording ? 'Stop recording' : 'Start voice input'}
+            >
+              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
-            <button className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors">
-              Report User
+
+            <div className="flex-1 relative">
+              <textarea
+                value={newMessage}
+                onChange={e => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={isRecording ? 'Listening...' : 'Type a message...'}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                rows={1}
+                style={{ minHeight: '48px', maxHeight: '120px' }}
+              />
+              {isRecording && (
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-red-500 font-medium">Recording</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleSendMessage}
+              disabled={!newMessage.trim() || isProcessing}
+              className="p-3 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Send message"
+            >
+              {isProcessing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
             </button>
           </div>
+          {isRecording && (
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Click the microphone again to stop recording and send
+            </p>
+          )}
         </div>
       </div>
     </div>

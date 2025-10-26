@@ -10,6 +10,7 @@ import {
 import { getUserProfile, signOut } from '@/lib/authService'
 import { UserProfile } from '@/lib/authService'
 import { useAuth } from '@/contexts/AuthContext'
+import { findMatchesForUser } from '@/lib/dbService'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -39,43 +40,41 @@ export default function DashboardPage() {
         setUserProfile(profile)
       }
 
-      // Get matches (mock data for now - will be replaced with actual API call)
-      const mockMatches = [
-        {
-          id: '1',
-          name: 'Sarah Williams',
-          age: 22,
-          role: 'seeker',
-          location: 'Berkeley, CA',
-          interests: ['Technology', 'Reading', 'Photography'],
-          compatibilityScore: 9.2,
-          bio: 'CS student looking for career guidance and mentorship.',
-          matchReasons: ['Shared interest in technology', 'Both enjoy reading', 'Located nearby']
-        },
-        {
-          id: '2',
-          name: 'Michael Chen',
-          age: 68,
-          role: 'mentor',
-          location: 'San Francisco, CA',
-          interests: ['Music', 'Cooking', 'Travel'],
-          compatibilityScore: 8.7,
-          bio: 'Retired teacher passionate about sharing life experiences.',
-          matchReasons: ['Complementary personalities', 'Similar availability', 'Shared love of music']
-        },
-        {
-          id: '3',
-          name: 'Emma Rodriguez',
-          age: 25,
-          role: 'seeker',
-          location: 'Oakland, CA',
-          interests: ['Art', 'Gardening', 'Community'],
-          compatibilityScore: 8.5,
-          bio: 'Artist seeking wisdom and creative inspiration.',
-          matchReasons: ['Both value community', 'Similar communication styles', 'Empathetic personalities']
+      // Get real matches from Firebase using the matching algorithm
+      const realMatches = await findMatchesForUser(user.uid, 10)
+
+      // Format matches for display
+      const formattedMatches = realMatches.map(match => {
+        const commonInterests = profile?.interests?.filter(i => match.interests?.includes(i)) || []
+        const matchReasons = []
+
+        if (commonInterests.length > 0) {
+          matchReasons.push(`Shared interests: ${commonInterests.slice(0, 2).join(', ')}`)
         }
-      ]
-      setMatches(mockMatches)
+        if (match.matchScores.personalityScore > 7) {
+          matchReasons.push('Compatible personalities')
+        }
+        if (match.location === profile?.location) {
+          matchReasons.push('Located nearby')
+        }
+        if (match.role !== profile?.role) {
+          matchReasons.push(`Perfect ${match.role === 'mentor' ? 'mentor' : 'mentee'} match`)
+        }
+
+        return {
+          id: match.uid,
+          name: match.name,
+          age: match.age,
+          role: match.role,
+          location: match.location,
+          interests: match.interests || [],
+          compatibilityScore: match.matchScores.compatibilityScore,
+          bio: match.bio || 'No bio provided yet.',
+          matchReasons: matchReasons.length > 0 ? matchReasons : ['Good overall compatibility']
+        }
+      })
+
+      setMatches(formattedMatches)
       setLoading(false)
     } catch (error) {
       console.error('Error loading user data:', error)
@@ -438,7 +437,10 @@ export default function DashboardPage() {
 
                       {/* Actions */}
                       <div className="flex gap-3 mt-6">
-                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                        <button
+                          onClick={() => router.push(`/chat/${match.id}`)}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
                           <MessageCircle className="w-4 h-4" />
                           Start Conversation
                         </button>

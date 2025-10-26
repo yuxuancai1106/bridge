@@ -163,6 +163,71 @@ export async function updateMatch(matchId: string, updates: Partial<Match>) {
   });
 }
 
+// ===== MATCHING ALGORITHM =====
+
+export function calculateMatchingScore(user1: UserProfile, user2: UserProfile) {
+  // Interest matching (40% weight)
+  const user1Interests = new Set(user1.interests || []);
+  const user2Interests = new Set(user2.interests || []);
+  const commonInterests = [...user1Interests].filter(i => user2Interests.has(i));
+  const interestScore = user1Interests.size > 0 && user2Interests.size > 0
+    ? (commonInterests.length / Math.max(user1Interests.size, user2Interests.size)) * 10
+    : 5;
+
+  // Personality matching (30% weight)
+  const personality1 = user1.personality || { extrovert: 5, patient: 5, humorous: 5, empathetic: 5 };
+  const personality2 = user2.personality || { extrovert: 5, patient: 5, humorous: 5, empathetic: 5 };
+
+  const personalityDiff = Math.sqrt(
+    Math.pow((personality1.extrovert || 5) - (personality2.extrovert || 5), 2) +
+    Math.pow((personality1.patient || 5) - (personality2.patient || 5), 2) +
+    Math.pow((personality1.humorous || 5) - (personality2.humorous || 5), 2) +
+    Math.pow((personality1.empathetic || 5) - (personality2.empathetic || 5), 2)
+  );
+  const personalityScore = Math.max(0, 10 - (personalityDiff / 4));
+
+  // Role motivation matching (20% weight)
+  const motivationScore = user1.role !== user2.role ? 10 : 5;
+
+  // Location matching (10% weight)
+  const locationScore = user1.location === user2.location ? 10 : 5;
+
+  // Calculate total score
+  const totalScore =
+    interestScore * 0.4 +
+    personalityScore * 0.3 +
+    motivationScore * 0.2 +
+    locationScore * 0.1;
+
+  return {
+    compatibilityScore: Math.round(totalScore * 10) / 10,
+    interestScore: Math.round(interestScore * 10) / 10,
+    personalityScore: Math.round(personalityScore * 10) / 10,
+    motivationScore: Math.round(motivationScore * 10) / 10,
+    locationScore: Math.round(locationScore * 10) / 10,
+  };
+}
+
+export async function findMatchesForUser(userId: string, maxMatches: number = 10): Promise<(UserProfile & { matchScores: ReturnType<typeof calculateMatchingScore> })[]> {
+  const currentUser = await getUser(userId);
+  if (!currentUser) return [];
+
+  // Get all other users
+  const allUsers = await getAllUsers();
+  const otherUsers = allUsers.filter(u => u.uid !== userId);
+
+  // Calculate scores for each user
+  const usersWithScores = otherUsers.map(user => ({
+    ...user,
+    matchScores: calculateMatchingScore(currentUser, user)
+  }));
+
+  // Sort by compatibility score and return top matches
+  return usersWithScores
+    .sort((a, b) => b.matchScores.compatibilityScore - a.matchScores.compatibilityScore)
+    .slice(0, maxMatches);
+}
+
 // ===== CONVERSATION OPERATIONS =====
 
 export async function createConversation(participants: string[]): Promise<string> {
