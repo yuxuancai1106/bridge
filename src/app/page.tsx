@@ -1,13 +1,30 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Heart, Users, Shield, MessageCircle } from 'lucide-react'
 import TTSControls from '@/components/TTSControls'
 import TTSButton from '@/components/TTSButton'
 import { useTTS } from '@/hooks/useTTS'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function Home() {
   const { speak } = useTTS()
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  // Show loading while checking auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   const handleReadHero = () => {
     speak("Bridge Generations, One Conversation at a Time. Connect with wisdom, share experiences, and build meaningful relationships across generations. Whether you're seeking mentorship or want to share your knowledge, Bridge brings people together.")
@@ -39,9 +56,15 @@ export default function Home() {
                 <Link href="/safety" className="text-gray-600 hover:text-indigo-600">
                   Safety
                 </Link>
-                <Link href="/login" className="text-gray-600 hover:text-indigo-600">
-                  Sign In
-                </Link>
+                {user ? (
+                  <Link href="/dashboard" className="text-indigo-600 font-semibold hover:text-indigo-700">
+                    Dashboard
+                  </Link>
+                ) : (
+                  <Link href="/login" className="text-gray-600 hover:text-indigo-600">
+                    Sign In
+                  </Link>
+                )}
               </nav>
             </div>
           </div>
@@ -78,18 +101,29 @@ export default function Home() {
           
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Link 
-              href="/signup?role=mentor"
-              className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              👵 I'm a Mentor
-            </Link>
-            <Link 
-              href="/signup?role=seeker"
-              className="bg-white text-indigo-600 border-2 border-indigo-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-50 transition-colors"
-            >
-              👩‍🎓 I'm a Student
-            </Link>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/signup?role=mentor"
+                  className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors"
+                >
+                  👵 I'm a Mentor
+                </Link>
+                <Link
+                  href="/signup?role=seeker"
+                  className="bg-white text-indigo-600 border-2 border-indigo-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-50 transition-colors"
+                >
+                  👩‍🎓 I'm a Student
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Features Grid */}
@@ -233,7 +267,7 @@ export default function Home() {
           <div className="text-center">
             <div className="flex flex-col items-center gap-4 mb-8">
               <h2 className="text-3xl font-bold">Ready to Bridge the Gap?</h2>
-              <TTSButton 
+              <TTSButton
                 text="Ready to Bridge the Gap? Join thousands of people building meaningful connections across generations."
                 className="text-lg"
               >
@@ -243,12 +277,21 @@ export default function Home() {
             <p className="text-xl text-gray-600 mb-8">
               Join thousands of people building meaningful connections across generations.
             </p>
-            <Link 
-              href="/signup"
-              className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors inline-block"
-            >
-              Get Started Today
-            </Link>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors inline-block"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/signup"
+                className="bg-indigo-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors inline-block"
+              >
+                Get Started Today
+              </Link>
+            )}
           </div>
         </div>
       </main>

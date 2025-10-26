@@ -10,11 +10,14 @@ import TTSButton from '@/components/TTSButton'
 import SpeechInput from '@/components/SpeechInput'
 import SpeechTextarea from '@/components/SpeechTextarea'
 import { useTTS } from '@/hooks/useTTS'
+import { signUpWithEmail } from '@/lib/authService'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface FormData {
   // Basic Info
   name: string
   email: string
+  password: string
   age: number
   location: string
   pronouns: string
@@ -49,11 +52,37 @@ function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { speak } = useTTS()
-  
+  const { user, loading: authLoading } = useAuth()
+
   const [currentStep, setCurrentStep] = useState(1)
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.push('/dashboard')
+    }
+  }, [user, authLoading, router])
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if logged in (will redirect)
+  if (user) {
+    return null
+  }
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
+    password: '',
     age: 0,
     location: '',
     pronouns: '',
@@ -73,6 +102,8 @@ function SignupForm() {
     housing_offering: false,
     housing_seeking: false
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   // TTS helper functions
   const speakStepInstructions = (step: number) => {
@@ -110,14 +141,41 @@ function SignupForm() {
   }
 
   const handleSubmit = async () => {
+    setLoading(true)
+    setError('')
+
     try {
-      // Here you would typically send the data to your backend
-      console.log('Form submitted:', formData)
-      
-      // For demo purposes, redirect to matches page
-      router.push('/matches')
-    } catch (error) {
+      // Validate required fields
+      if (!formData.email || !formData.password || !formData.name) {
+        setError('Please fill in all required fields')
+        setLoading(false)
+        return
+      }
+
+      // Create Firebase account
+      await signUpWithEmail(formData.email, formData.password, {
+        name: formData.name,
+        role: formData.role,
+        age: formData.age,
+        location: formData.location,
+        pronouns: formData.pronouns,
+        interests: formData.interests,
+        bio: formData.motivation,
+        personality: {
+          extrovert: formData.personality.extrovert ? 8 : 5,
+          patient: formData.personality.patient ? 8 : 5,
+          humorous: formData.personality.humorous ? 8 : 5,
+          empathetic: formData.personality.empathetic ? 8 : 5,
+        },
+        availability: formData.availability.preferred_times,
+      })
+
+      // Redirect to dashboard after successful signup
+      router.push('/dashboard')
+    } catch (error: any) {
       console.error('Error submitting form:', error)
+      setError(error.message || 'Failed to create account. Please try again.')
+      setLoading(false)
     }
   }
 
@@ -164,7 +222,7 @@ function SignupForm() {
                   <label className="block text-sm font-medium text-gray-700">
                     Email address *
                   </label>
-                  <TTSButton 
+                  <TTSButton
                     text="Email address. Enter your email address."
                     className="text-xs"
                   >
@@ -180,7 +238,30 @@ function SignupForm() {
                   enableLLMCorrection={true}
                 />
               </div>
-              
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Password *
+                  </label>
+                  <TTSButton
+                    text="Password. Create a secure password for your account."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => updateFormData({ password: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Create a password"
+                  minLength={6}
+                />
+                <p className="text-xs text-gray-500 mt-1">At least 6 characters</p>
+              </div>
+
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <label className="block text-sm font-medium text-gray-700">
@@ -540,9 +621,10 @@ function SignupForm() {
               </p>
               <button
                 onClick={handleSubmit}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors"
+                disabled={loading}
+                className="bg-indigo-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Complete Profile
+                {loading ? 'Creating Account...' : 'Complete Profile'}
               </button>
             </div>
           </div>
@@ -603,6 +685,11 @@ function SignupForm() {
       {/* Main Content */}
       <main className="max-w-2xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-md p-8">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
           {renderStep()}
           
           {/* Navigation */}
@@ -627,9 +714,10 @@ function SignupForm() {
             ) : (
               <button
                 onClick={handleSubmit}
-                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                disabled={loading}
+                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Complete Profile
+                {loading ? 'Creating Account...' : 'Complete Profile'}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </button>
             )}
