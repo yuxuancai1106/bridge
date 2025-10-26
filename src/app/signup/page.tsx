@@ -5,6 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { INTEREST_CATEGORIES, PERSONALITY_TRAITS, AVAILABILITY_TIMES, COMMUNICATION_MODES } from '@/lib/utils'
+import TTSControls from '@/components/TTSControls'
+import TTSButton from '@/components/TTSButton'
+import SpeechInput from '@/components/SpeechInput'
+import SpeechTextarea from '@/components/SpeechTextarea'
+import { useTTS } from '@/hooks/useTTS'
 
 interface FormData {
   // Basic Info
@@ -43,6 +48,8 @@ interface FormData {
 function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { speak } = useTTS()
+  
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -66,6 +73,23 @@ function SignupForm() {
     housing_offering: false,
     housing_seeking: false
   })
+
+  // TTS helper functions
+  const speakStepInstructions = (step: number) => {
+    const instructions = {
+      1: "Step 1: Basic Information. Please provide your name, email address, age, location, and pronouns. This information helps us create your profile and find compatible matches.",
+      2: "Step 2: Role and Motivation. Choose whether you're a mentor who wants to share knowledge, or a seeker who wants to learn. Tell us what motivates you to connect with others.",
+      3: "Step 3: Interests and Personality. Select your interests and personality traits. This helps us match you with people who share similar passions and complementary personalities.",
+      4: "Step 4: Availability and Communication. Choose your preferred meeting times and communication methods. This ensures we match you with people who are available when you are.",
+      5: "Step 5: Safety and Verification. Review our safety guidelines and agree to our terms. Your safety is our top priority."
+    }
+    speak(instructions[step as keyof typeof instructions] || "Please complete this step.")
+  }
+
+  const speakFieldLabel = (label: string, placeholder?: string) => {
+    const text = placeholder ? `${label}. ${placeholder}` : label
+    speak(text)
+  }
 
   const totalSteps = 6
 
@@ -102,39 +126,73 @@ function SignupForm() {
       case 1:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-center mb-8">Let's Get Started!</h2>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <h2 className="text-2xl font-bold text-center">Let's Get Started!</h2>
+              <TTSButton 
+                text="Let's Get Started! Please provide your basic information to create your profile."
+                className="text-lg"
+              >
+                🔊 Read Instructions
+              </TTSButton>
+            </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  What's your name? *
-                </label>
-                <input
-                  type="text"
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    What's your name? *
+                  </label>
+                  <TTSButton 
+                    text="What's your name? Enter your full name."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
+                <SpeechInput
                   value={formData.name}
-                  onChange={(e) => updateFormData({ name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onChange={(value) => updateFormData({ name: value })}
                   placeholder="Enter your full name"
+                  className="w-full"
+                  fieldType="name"
+                  enableLLMCorrection={true}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email address *
-                </label>
-                <input
-                  type="email"
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Email address *
+                  </label>
+                  <TTSButton 
+                    text="Email address. Enter your email address."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
+                <SpeechInput
                   value={formData.email}
-                  onChange={(e) => updateFormData({ email: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onChange={(value) => updateFormData({ email: value })}
                   placeholder="your@email.com"
+                  className="w-full"
+                  fieldType="email"
+                  enableLLMCorrection={true}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Age *
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Age *
+                  </label>
+                  <TTSButton 
+                    text="Age. Enter your age."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
                 <input
                   type="number"
                   value={formData.age || ''}
@@ -146,22 +204,39 @@ function SignupForm() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Location (City, State) *
-                </label>
-                <input
-                  type="text"
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Location (City, State) *
+                  </label>
+                  <TTSButton 
+                    text="Location. Enter your city and state."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
+                <SpeechInput
                   value={formData.location}
-                  onChange={(e) => updateFormData({ location: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onChange={(value) => updateFormData({ location: value })}
                   placeholder="e.g., Berkeley, CA"
+                  className="w-full"
+                  fieldType="location"
+                  enableLLMCorrection={true}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Pronouns
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Pronouns
+                  </label>
+                  <TTSButton 
+                    text="Pronouns. Select your preferred pronouns."
+                    className="text-xs"
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
                 <select
                   value={formData.pronouns}
                   onChange={(e) => updateFormData({ pronouns: e.target.value })}
@@ -181,7 +256,15 @@ function SignupForm() {
       case 2:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-center mb-8">What are your interests?</h2>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <h2 className="text-2xl font-bold text-center">What are your interests?</h2>
+              <TTSButton 
+                text="What are your interests? Select topics you enjoy talking about. This helps us find compatible matches."
+                className="text-lg"
+              >
+                🔊 Read Instructions
+              </TTSButton>
+            </div>
             <p className="text-gray-600 text-center mb-6">
               Select topics you enjoy talking about. This helps us find compatible matches.
             </p>
@@ -212,7 +295,15 @@ function SignupForm() {
       case 3:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-center mb-8">Tell us about your personality</h2>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <h2 className="text-2xl font-bold text-center">Tell us about your personality</h2>
+              <TTSButton 
+                text="Tell us about your personality. Help us understand how you interact with others by selecting traits that describe you."
+                className="text-lg"
+              >
+                🔊 Read Instructions
+              </TTSButton>
+            </div>
             <p className="text-gray-600 text-center mb-6">
               Help us understand how you interact with others.
             </p>
@@ -220,9 +311,15 @@ function SignupForm() {
             <div className="space-y-4">
               {PERSONALITY_TRAITS.map((trait) => (
                 <div key={trait.key} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium">{trait.label}</div>
                     <div className="text-sm text-gray-600">{trait.description}</div>
+                    <TTSButton 
+                      text={`${trait.label}. ${trait.description}`}
+                      className="text-xs mt-2"
+                    >
+                      🔊 Read Trait
+                    </TTSButton>
                   </div>
                   <button
                     onClick={() => {
@@ -323,24 +420,41 @@ function SignupForm() {
       case 5:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-center mb-8">What motivates you?</h2>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <h2 className="text-2xl font-bold text-center">What motivates you?</h2>
+              <TTSButton 
+                text="What motivates you? Help us understand what you're looking for in a connection by telling us about your goals."
+                className="text-lg"
+              >
+                🔊 Read Instructions
+              </TTSButton>
+            </div>
             <p className="text-gray-600 text-center mb-6">
               Help us understand what you're looking for in a connection.
             </p>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tell us about your goals and what you hope to gain from Bridge
-              </label>
-              <textarea
+              <div className="flex items-center gap-2 mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Tell us about your goals and what you hope to gain from Bridge
+                </label>
+                <TTSButton 
+                  text="Tell us about your goals and what you hope to gain from Bridge. Share your motivation for joining."
+                  className="text-xs"
+                >
+                  🔊
+                </TTSButton>
+              </div>
+              <SpeechTextarea
                 value={formData.motivation}
-                onChange={(e) => updateFormData({ motivation: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent h-32 resize-none"
+                onChange={(value) => updateFormData({ motivation: value })}
                 placeholder={
                   formData.role === 'mentor' 
                     ? "I want to share my life experience and help young people navigate their careers and personal growth..."
                     : "I want to learn from experienced professionals and find mentorship in my career journey..."
                 }
+                rows={4}
+                className="w-full"
               />
             </div>
             
@@ -389,7 +503,15 @@ function SignupForm() {
       case 6:
         return (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-center mb-8">Review Your Profile</h2>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <h2 className="text-2xl font-bold text-center">Review Your Profile</h2>
+              <TTSButton 
+                text="Review Your Profile. Please review all your information before completing your profile. Make sure everything looks correct."
+                className="text-lg"
+              >
+                🔊 Read Instructions
+              </TTSButton>
+            </div>
             
             <div className="bg-gray-50 p-6 rounded-lg space-y-4">
               <div>
@@ -440,8 +562,11 @@ function SignupForm() {
             <Link href="/" className="text-2xl font-bold text-indigo-600">
               🌉 Bridge
             </Link>
-            <div className="text-sm text-gray-600">
-              Step {currentStep} of {totalSteps}
+            <div className="flex items-center gap-4">
+              <TTSControls compact={true} showSettings={false} />
+              <div className="text-sm text-gray-600">
+                Step {currentStep} of {totalSteps}
+              </div>
             </div>
           </div>
         </div>

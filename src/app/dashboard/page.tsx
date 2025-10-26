@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Users, MessageCircle, Heart, TrendingUp, Clock, Award, Target } from 'lucide-react'
+import TTSControls from '@/components/TTSControls'
+import TTSButton from '@/components/TTSButton'
+import { useTTS } from '@/hooks/useTTS'
 
 interface DashboardStats {
   totalConnections: number
@@ -26,6 +29,17 @@ export default function DashboardPage() {
   })
 
   const [loading, setLoading] = useState(true)
+  const { speak } = useTTS()
+
+  const speakStatsOverview = () => {
+    const text = `Dashboard Overview. You have made ${stats.totalConnections} connections, sent ${stats.totalMessages} messages, and spent ${stats.totalHours} hours connecting with others. Your community score is ${stats.communityScore} out of 5. You have ${stats.matchesThisWeek} new matches this week and ${stats.conversationsActive} active conversations. Your impact score is ${stats.impactScore} percent.`
+    speak(text)
+  }
+
+  const speakStatCard = (title: string, value: string | number, description: string) => {
+    const text = `${title}: ${value}. ${description}`
+    speak(text)
+  }
 
   useEffect(() => {
     // Mock data for demo
@@ -141,6 +155,7 @@ export default function DashboardPage() {
               🌉 Bridge
             </Link>
             <div className="flex items-center space-x-4">
+              <TTSControls compact={true} showSettings={false} />
               <Link href="/matches" className="text-gray-600 hover:text-indigo-600">
                 Matches
               </Link>
@@ -157,51 +172,103 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Impact Dashboard</h1>
-          <p className="text-lg text-gray-600">
-            See how you're making a difference in connecting generations
-          </p>
+          <div className="flex flex-col items-center gap-4 mb-4">
+            <h1 className="text-3xl font-bold text-gray-900">Your Impact Dashboard</h1>
+            <TTSButton 
+              text="Your Impact Dashboard. See how you're making a difference in connecting generations."
+              className="text-lg"
+            >
+              🔊 Read Title
+            </TTSButton>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-lg text-gray-600">
+              See how you're making a difference in connecting generations
+            </p>
+            <TTSButton 
+              text="See how you're making a difference in connecting generations"
+              onClick={speakStatsOverview}
+            >
+              🔊 Read Overview
+            </TTSButton>
+          </div>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <Users className="w-8 h-8 text-blue-600 mr-3" />
-              <div>
-                <p className="text-sm text-gray-600">Total Connections</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalConnections}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Users className="w-8 h-8 text-blue-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Total Connections</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalConnections}</p>
+                </div>
               </div>
+              <TTSButton 
+                text={`Total Connections: ${stats.totalConnections}. People you've connected with through Bridge.`}
+                className="text-xs"
+                onClick={() => speakStatCard("Total Connections", stats.totalConnections, "People you've connected with through Bridge")}
+              >
+                🔊
+              </TTSButton>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <MessageCircle className="w-8 h-8 text-green-600 mr-3" />
-              <div>
-                <p className="text-sm text-gray-600">Messages Sent</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalMessages}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <MessageCircle className="w-8 h-8 text-green-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Messages Sent</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalMessages}</p>
+                </div>
               </div>
+              <TTSButton 
+                text={`Messages Sent: ${stats.totalMessages}. Total messages you've sent to your connections.`}
+                className="text-xs"
+                onClick={() => speakStatCard("Messages Sent", stats.totalMessages, "Total messages you've sent to your connections")}
+              >
+                🔊
+              </TTSButton>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <Clock className="w-8 h-8 text-purple-600 mr-3" />
-              <div>
-                <p className="text-sm text-gray-600">Hours Connected</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalHours}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Clock className="w-8 h-8 text-purple-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Hours Connected</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalHours}</p>
+                </div>
               </div>
+              <TTSButton 
+                text={`Hours Connected: ${stats.totalHours}. Total time spent in meaningful conversations.`}
+                className="text-xs"
+                onClick={() => speakStatCard("Hours Connected", stats.totalHours, "Total time spent in meaningful conversations")}
+              >
+                🔊
+              </TTSButton>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <div className="flex items-center">
-              <Heart className="w-8 h-8 text-pink-600 mr-3" />
-              <div>
-                <p className="text-sm text-gray-600">Community Score</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.communityScore}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Heart className="w-8 h-8 text-pink-600 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-600">Community Score</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.communityScore}</p>
+                </div>
               </div>
+              <TTSButton 
+                text={`Community Score: ${stats.communityScore} out of 5. Your rating from the community.`}
+                className="text-xs"
+                onClick={() => speakStatCard("Community Score", `${stats.communityScore} out of 5`, "Your rating from the community")}
+              >
+                🔊
+              </TTSButton>
             </div>
           </div>
         </div>
@@ -223,6 +290,12 @@ export default function DashboardPage() {
               <div className="text-6xl font-bold">{stats.impactScore}</div>
               <div className="text-indigo-200">Impact Points</div>
             </div>
+            <TTSButton 
+              text={`Your Impact Score: ${stats.impactScore} points. You've made a significant positive impact on ${stats.totalConnections} people's lives. Plus 12 percent this month.`}
+              className="bg-white text-indigo-600 hover:bg-indigo-50"
+            >
+              🔊 Read Impact
+            </TTSButton>
           </div>
         </div>
 

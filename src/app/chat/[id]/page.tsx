@@ -5,6 +5,9 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Send, Shield, Heart, MessageCircle } from 'lucide-react'
 import { CONVERSATION_STARTERS, SAFETY_TIPS } from '@/lib/utils'
+import TTSControls from '@/components/TTSControls'
+import TTSButton from '@/components/TTSButton'
+import { useTTS } from '@/hooks/useTTS'
 
 interface Message {
   id: string
@@ -34,6 +37,25 @@ export default function ChatPage() {
   const [currentUser, setCurrentUser] = useState<ChatUser | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [showSafetyTips, setShowSafetyTips] = useState(true)
+  const { speak, isEnabled } = useTTS()
+
+  const speakMessage = (message: Message, senderName: string) => {
+    if (isEnabled) {
+      speak(`${senderName} says: ${message.content}`)
+    }
+  }
+
+  const speakConversationStarter = (starter: string) => {
+    if (isEnabled) {
+      speak(`Conversation starter: ${starter}`)
+    }
+  }
+
+  const speakSafetyTip = (tip: string) => {
+    if (isEnabled) {
+      speak(`Safety tip: ${tip}`)
+    }
+  }
 
   useEffect(() => {
     // Mock data for demo
@@ -180,6 +202,7 @@ export default function ChatPage() {
               </div>
             </div>
             <div className="flex items-center text-sm text-gray-600">
+              <TTSControls compact={true} showSettings={false} />
               <Heart className="w-4 h-4 text-yellow-500 mr-1" />
               <span>{chatUser?.community_score}</span>
             </div>
@@ -231,7 +254,18 @@ export default function ChatPage() {
                       : 'bg-white text-gray-900 border border-gray-200'
                   }`}
                 >
-                  <p className="text-sm">{message.content}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm flex-1">{message.content}</p>
+                    {message.message_type !== 'system' && isEnabled && (
+                      <TTSButton 
+                        text={`${message.sender_id === currentUser?.id ? 'You' : chatUser?.name} says: ${message.content}`}
+                        className="ml-2 text-xs"
+                        onClick={() => speakMessage(message, message.sender_id === currentUser?.id ? 'You' : chatUser?.name || 'Unknown')}
+                      >
+                        🔊
+                      </TTSButton>
+                    )}
+                  </div>
                   {message.message_type !== 'system' && (
                     <p className="text-xs opacity-70 mt-1">
                       {formatTime(message.created_at)}
@@ -275,13 +309,21 @@ export default function ChatPage() {
             </h3>
             <div className="space-y-2">
               {CONVERSATION_STARTERS.slice(0, 4).map((starter, index) => (
-                <button
-                  key={index}
-                  onClick={() => sendConversationStarter(starter)}
-                  className="w-full text-left p-3 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  {starter}
-                </button>
+                <div key={index} className="flex items-center gap-2">
+                  <button
+                    onClick={() => sendConversationStarter(starter)}
+                    className="flex-1 text-left p-3 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    {starter}
+                  </button>
+                  <TTSButton 
+                    text={`Conversation starter: ${starter}`}
+                    className="text-xs"
+                    onClick={() => speakConversationStarter(starter)}
+                  >
+                    🔊
+                  </TTSButton>
+                </div>
               ))}
             </div>
           </div>
@@ -294,8 +336,17 @@ export default function ChatPage() {
             </h3>
             <div className="space-y-2">
               {SAFETY_TIPS.map((tip, index) => (
-                <div key={index} className="text-sm text-gray-600 p-2 bg-yellow-50 rounded">
-                  {tip}
+                <div key={index} className="flex items-center gap-2">
+                  <div className="text-sm text-gray-600 p-2 bg-yellow-50 rounded flex-1">
+                    {tip}
+                  </div>
+                  <TTSButton 
+                    text={`Safety tip: ${tip}`}
+                    className="text-xs"
+                    onClick={() => speakSafetyTip(tip)}
+                  >
+                    🔊
+                  </TTSButton>
                 </div>
               ))}
             </div>

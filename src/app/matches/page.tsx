@@ -4,11 +4,26 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Heart, MessageCircle, MapPin, Clock, Star, Shield } from 'lucide-react'
 import { User, MatchScore } from '@/lib/supabase'
+import TTSControls from '@/components/TTSControls'
+import TTSButton from '@/components/TTSButton'
+import { useTTS } from '@/hooks/useTTS'
 import { getTopMatches } from '@/lib/matching'
 
 export default function MatchesPage() {
   const [matches, setMatches] = useState<MatchScore[]>([])
   const [loading, setLoading] = useState(true)
+  const { speak } = useTTS()
+
+  const speakMatchDescription = (match: MatchScore) => {
+    const description = `${match.user.name}, ${match.user.age} years old, from ${match.user.location}. Compatibility score: ${Math.round(match.compatibility_score * 100)}%. Shared interests: ${match.breakdown.interests.join(', ')}. ${match.breakdown.personality_match.join(', ')}. ${match.breakdown.motivation_alignment}`
+    speak(description)
+  }
+
+  const speakMatchesOverview = () => {
+    const count = matches.length
+    const avgScore = matches.length > 0 ? Math.round(matches.reduce((sum, m) => sum + m.compatibility_score, 0) / matches.length * 100) : 0
+    speak(`You have ${count} potential matches with an average compatibility score of ${avgScore} percent. These matches are based on your interests, personality, and location.`)
+  }
   const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   useEffect(() => {
@@ -159,6 +174,7 @@ export default function MatchesPage() {
               🌉 Bridge
             </Link>
             <div className="flex items-center space-x-4">
+              <TTSControls compact={true} showSettings={false} />
               <span className="text-gray-600">Welcome, {currentUser?.name}</span>
               <Link href="/profile" className="text-indigo-600 hover:text-indigo-800">
                 Profile
@@ -171,12 +187,28 @@ export default function MatchesPage() {
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Your Perfect Matches
-          </h1>
-          <p className="text-lg text-gray-600">
-            We've found {matches.length} people who share your interests and goals
-          </p>
+          <div className="flex flex-col items-center gap-4 mb-4">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Your Perfect Matches
+            </h1>
+            <TTSButton 
+              text="Your Perfect Matches. We've found people who share your interests and goals."
+              className="text-lg"
+            >
+              🔊 Read Title
+            </TTSButton>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-lg text-gray-600">
+              We've found {matches.length} people who share your interests and goals
+            </p>
+            <TTSButton 
+              text={`We've found ${matches.length} people who share your interests and goals`}
+              onClick={speakMatchesOverview}
+            >
+              🔊 Read Overview
+            </TTSButton>
+          </div>
         </div>
 
         {/* Matches Grid */}
@@ -213,7 +245,16 @@ export default function MatchesPage() {
                   </div>
                 </div>
 
-                {/* Compatibility Score */}
+                {/* TTS Button for Match Description */}
+                <div className="flex justify-center mb-4">
+                  <TTSButton 
+                    text={`${match.user.name}, ${match.user.age} years old, from ${match.user.location}. Compatibility score: ${Math.round(match.compatibility_score * 100)}%. Shared interests: ${match.breakdown.interests.join(', ')}. ${match.breakdown.personality_match.join(', ')}. ${match.breakdown.motivation_alignment}`}
+                    className="text-sm"
+                    onClick={() => speakMatchDescription(match)}
+                  >
+                    🔊 Read Match Details
+                  </TTSButton>
+                </div>
                 <div className="mb-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium text-gray-700">Compatibility</span>
